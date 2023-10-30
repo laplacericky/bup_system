@@ -21,7 +21,7 @@ def main():
         assert not os.path.exists(f'{base_dir}/.bup')
         subprocess.run(['bup', 'init'], check = True)
     else:
-        assert os.path.exists(f'{base_dir}/.bup')
+        assert os.path.isdir(f'{base_dir}/.bup')
         if args.mode == 'ds':
             subprocess.run(['du', '-sh', f'{base_dir}/.bup'], check = True)
         else:
