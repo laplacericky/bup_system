@@ -1,29 +1,80 @@
 #!/usr/bin/env python3
 import argparse,sys
 import subprocess,os
+import datetime
+from zoneinfo import ZoneInfo
+import shutil
+
+date_format = '%Y-%m-%d-%H%M%S'
+HK_timezone = ZoneInfo('Asia/Hong_Kong')
+def path_cannot_exist(path):
+    assert not os.path.exists(path), f'{path} exists'
+
+
+def get_version(targets):
+    version = datetime.datetime(960, 2, 4, tzinfo = HK_timezone)
+    for t in targets:
+        r = subprocess.run(['bup', 'ls', '-l', f'local-{t}'], check = True, stdout = subprocess.PIPE, text = True)
+        d = datetime.datetime.strptime(r.stdout.splitlines()[-1].split()[-1], date_format).replace(tzinfo=HK_timezone)
+        version = max(d, version)
+    return version
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices = ['backup','ls','restore','ds','init'] )
+    parser.add_argument('mode', choices = ['backup','ls','restore','ds','init', 'bundle', 'unbundle', 'update', 'version'] )
     parser.add_argument('target', nargs='?')
     parser.add_argument('--version', default = 'latest')
     args = parser.parse_args()
 
-    with open('./params/bup_targets.txt') as f:
+    with open('./params/public/bup_targets.txt') as f:
         valid_targets = f.read().splitlines()
 
     base_dir = os.getcwd()
     proj_name = os.path.basename(base_dir)
     print(f'project name: {proj_name}')
-    os.environ['BUP_DIR'] = f'{base_dir}/.bup'
+    bup_dir = f'{base_dir}/.{proj_name}_bup'
+    os.environ['BUP_DIR'] = bup_dir
+    relative_bup_dir = f'.{proj_name}_bup'
 
     if args.mode == 'init':
-        assert not os.path.exists(f'{base_dir}/.bup')
+        path_cannot_exist(bup_dir)
         subprocess.run(['bup', 'init'], check = True)
+    elif args.mode == 'unbundle':
+        path_cannot_exist(bup_dir)
+        prefix, suffix = os.path.splitext(os.path.basename(args.target))
+        assert '_'.join(prefix.split('_')[:-1]) == proj_name
+        assert suffix == '.tar'
+        subprocess.run(['tar', 'xf', args.target, f'--one-top-level={relative_bup_dir}', '--strip-components=1'], check = True)
+        print('unbundle success')
+
     else:
-        assert os.path.isdir(f'{base_dir}/.bup')
+        assert os.path.isdir(bup_dir)
         if args.mode == 'ds':
-            subprocess.run(['du', '-sh', f'{base_dir}/.bup'], check = True)
+            subprocess.run(['du', '-sh', bup_dir], check = True)
+        elif args.mode == 'version':
+            ver = get_version(valid_targets)
+            print(f'version date: {ver.strftime(date_format)}')
+        elif args.mode == 'bundle':
+            assert os.path.isdir('workdir')
+            ver = get_version(valid_targets)
+            bundle_name = f'{proj_name}_{ver.strftime(date_format)}.tar'
+            bundle_path = f'workdir/{bundle_name}'
+            path_cannot_exist(bundle_path)
+            subprocess.run(['tar', 'cf', bundle_path, relative_bup_dir], check = True)
+            print(f'bundled to {bundle_path}')
+        elif args.mode == 'update':
+            prefix, suffix = os.path.splitext(os.path.basename(args.target))
+            assert '_'.join(prefix.split('_')[:-1]) == proj_name
+            assert suffix == '.tar'
+            ver = get_version(valid_targets)
+            bundle_ver = datetime.datetime.strptime(prefix.split('_')[-1], date_format).replace(tzinfo=HK_timezone)
+            print(f'local version date: {ver.strftime(date_format)}')
+            print(f'bundle version date: {bundle_ver.strftime(date_format)}')
+            assert bundle_ver > ver, 'not a newer version'
+            shutil.rmtree(bup_dir)
+            subprocess.run(['tar', 'xf', args.target, f'--one-top-level={relative_bup_dir}', '--strip-components=1'], check = True)
+            print('update success')
+
         else:
             assert args.target in valid_targets
             folder_real_path = os.path.realpath(args.target)
