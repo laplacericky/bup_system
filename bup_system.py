@@ -90,12 +90,11 @@ def main():
         else:
             assert args.target in valid_targets
             target_path = Path(args.target)
-            if not target_path.exists():
-                target_path.mkdir()
-            folder_real_path = target_path.resolve(strict=True)
+            folder_real_path = target_path.resolve()
             folder_real_dir = folder_real_path.parent
             folder_name = args.target
             if args.mode == 'backup':
+                assert folder_real_path.exists()
                 subprocess.run(['bup', 'index', f'{folder_real_path}'], check = True)
                 subprocess.run(['bup', 'save', '-9', '-n', f'local-{folder_name}',
                                 f'--strip-path={folder_real_dir}', f'{folder_real_path}'], check = True)
