@@ -59,7 +59,7 @@ def main():
         print('unbundle success')
 
     else:
-        assert bup_dir.is_dir()
+        assert bup_dir.is_dir(), 'bup dir does not exist, run init to initialize or unbundle to import one'
         if args.mode == 'ds':
             subprocess.run(['du', '-sh', bup_dir], check = True)
         elif args.mode == 'version':
@@ -91,7 +91,7 @@ def main():
             assert args.target in valid_targets
             target_path = Path(args.target)
             folder_name = args.target
-            
+
             if args.mode == 'backup':
                 folder_real_path = target_path.resolve(strict = True)
                 folder_real_dir = folder_real_path.parent
